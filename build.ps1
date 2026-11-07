@@ -24,7 +24,7 @@ $references = @(
 $argsList = @(
     "/target:winexe",
     "/optimize+",
-    "/platform:anycpu",
+    "/platform:x64",
     "/win32manifest:`"$manifestFile`"",
     "/out:`"$outputExe`"",
     "/r:$references",
