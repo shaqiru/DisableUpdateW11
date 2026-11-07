@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Drawing;
+using System.Drawing.Drawing2D;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Security.AccessControl;
@@ -15,7 +16,7 @@ using Microsoft.Win32;
 
 namespace Win11UpdateBlocker
 {
-    #region Win32 API & Privilege Management
+    #region Win32 API & Hak Istimewa Sistem
     internal static class NativeMethods
     {
         public const int TOKEN_ADJUST_PRIVILEGES = 0x0020;
@@ -110,7 +111,7 @@ namespace Win11UpdateBlocker
 
                 SecurityIdentifier adminSid = new SecurityIdentifier(WellKnownSidType.BuiltinAdministratorsSid, null);
 
-                // Step 1: Ambil kepemilikan
+                // 1. Ambil kepemilikan kunci registry
                 using (RegistryKey baseKey = RegistryKey.OpenBaseKey(RegistryHive.LocalMachine, RegistryView.Registry64))
                 {
                     using (RegistryKey key = baseKey.OpenSubKey(subKeyPath, RegistryKeyPermissionCheck.ReadWriteSubTree, RegistryRights.TakeOwnership))
@@ -124,7 +125,7 @@ namespace Win11UpdateBlocker
                     }
                 }
 
-                // Step 2: Berikan hak Full Control ke Builtin Administrators
+                // 2. Berikan hak Full Control ke Builtin Administrators
                 using (RegistryKey baseKey = RegistryKey.OpenBaseKey(RegistryHive.LocalMachine, RegistryView.Registry64))
                 {
                     using (RegistryKey key = baseKey.OpenSubKey(subKeyPath, RegistryKeyPermissionCheck.ReadWriteSubTree, RegistryRights.ChangePermissions))
@@ -145,8 +146,231 @@ namespace Win11UpdateBlocker
             }
             catch
             {
-                // Fallback menggunakan perintah subinacl/reg/takeown jika diperlukan
             }
+        }
+    }
+    #endregion
+
+    #region Tema Desain Minimalis-Slate & Komponen Glass
+    public static class UITheme
+    {
+        // Palet Warna Minimalis Slate
+        public static readonly Color BgApp = Color.FromArgb(15, 23, 42);          // Slate 900
+        public static readonly Color BgHeader = Color.FromArgb(11, 15, 25);       // Slate 950
+        public static readonly Color BgCard = Color.FromArgb(22, 31, 48);         // Translucent Slate Card
+        public static readonly Color BgCardAlt = Color.FromArgb(17, 24, 39);      // Darker Slate Card
+        public static readonly Color BgInput = Color.FromArgb(9, 13, 22);         // Input / Log Box Background
+
+        public static readonly Color BorderCard = Color.FromArgb(41, 53, 72);     // Slate Border
+        public static readonly Color BorderSubtle = Color.FromArgb(30, 41, 59);   // Divider
+        public static readonly Color BorderHighlight = Color.FromArgb(59, 75, 99); // Active Highlight
+
+        public static readonly Color TextPrimary = Color.FromArgb(248, 250, 252);  // Slate 50 (Kontras Tinggi)
+        public static readonly Color TextSecondary = Color.FromArgb(148, 163, 184); // Slate 400
+        public static readonly Color TextMuted = Color.FromArgb(100, 116, 139);    // Slate 500
+
+        // Status Aksen (Memenuhi Kontras WCAG AA >= 4.5:1)
+        public static readonly Color EmeraldText = Color.FromArgb(110, 231, 183); // Emerald 300
+        public static readonly Color EmeraldBg = Color.FromArgb(6, 78, 59);       // Emerald 900
+        public static readonly Color EmeraldBorder = Color.FromArgb(16, 185, 129); // Emerald 500
+
+        public static readonly Color RoseText = Color.FromArgb(254, 205, 211);    // Rose 200
+        public static readonly Color RoseBg = Color.FromArgb(136, 19, 55);        // Rose 900
+        public static readonly Color RoseBorder = Color.FromArgb(244, 63, 94);    // Rose 500
+
+        public static readonly Color AmberText = Color.FromArgb(253, 230, 138);   // Amber 200
+        public static readonly Color AmberBg = Color.FromArgb(120, 53, 15);       // Amber 900
+        public static readonly Color AmberBorder = Color.FromArgb(217, 119, 6);   // Amber 600
+
+        public static readonly Color SkyText = Color.FromArgb(186, 230, 253);     // Sky 200
+        public static readonly Color SkyBorder = Color.FromArgb(56, 189, 248);    // Sky 400
+
+        public static GraphicsPath CreateRoundedPath(Rectangle rect, int radius)
+        {
+            GraphicsPath path = new GraphicsPath();
+            int d = radius * 2;
+            if (d > rect.Width) d = rect.Width;
+            if (d > rect.Height) d = rect.Height;
+
+            path.AddArc(rect.X, rect.Y, d, d, 180, 90);
+            path.AddArc(rect.Right - d, rect.Y, d, d, 270, 90);
+            path.AddArc(rect.Right - d, rect.Bottom - d, d, d, 0, 90);
+            path.AddArc(rect.X, rect.Bottom - d, d, d, 90, 90);
+            path.CloseFigure();
+            return path;
+        }
+
+        public static GraphicsPath CreateTopRoundedPath(Rectangle rect, int radius)
+        {
+            GraphicsPath path = new GraphicsPath();
+            int d = radius * 2;
+            if (d > rect.Width) d = rect.Width;
+            if (d > rect.Height) d = rect.Height;
+
+            path.AddArc(rect.X, rect.Y, d, d, 180, 90);
+            path.AddArc(rect.Right - d, rect.Y, d, d, 270, 90);
+            path.AddLine(rect.Right, rect.Bottom, rect.Left, rect.Bottom);
+            path.CloseFigure();
+            return path;
+        }
+    }
+
+    public class GlassPanel : Panel
+    {
+        public Color CardBgColor { get; set; }
+        public Color CardBorderColor { get; set; }
+        public int CornerRadius { get; set; }
+        public bool ShowTopHighlight { get; set; }
+
+        public GlassPanel()
+        {
+            SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.UserPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw, true);
+            CardBgColor = UITheme.BgCard;
+            CardBorderColor = UITheme.BorderCard;
+            CornerRadius = 10;
+            ShowTopHighlight = true;
+            Padding = new Padding(14);
+            BackColor = Color.Transparent;
+        }
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            Graphics g = e.Graphics;
+            g.SmoothingMode = SmoothingMode.AntiAlias;
+
+            Rectangle rect = new Rectangle(0, 0, Width - 1, Height - 1);
+            if (rect.Width <= 2 || rect.Height <= 2) return;
+
+            using (GraphicsPath path = UITheme.CreateRoundedPath(rect, CornerRadius))
+            {
+                using (SolidBrush brush = new SolidBrush(CardBgColor))
+                {
+                    g.FillPath(brush, path);
+                }
+
+                if (ShowTopHighlight && rect.Height > 16)
+                {
+                    Rectangle sheenRect = new Rectangle(rect.X + 1, rect.Y + 1, rect.Width - 2, 18);
+                    using (LinearGradientBrush sheenBrush = new LinearGradientBrush(
+                        sheenRect,
+                        Color.FromArgb(28, 255, 255, 255),
+                        Color.FromArgb(0, 255, 255, 255),
+                        LinearGradientMode.Vertical))
+                    {
+                        using (GraphicsPath topPath = UITheme.CreateTopRoundedPath(sheenRect, CornerRadius))
+                        {
+                            g.FillPath(sheenBrush, topPath);
+                        }
+                    }
+                }
+
+                using (Pen pen = new Pen(CardBorderColor, 1.0f))
+                {
+                    g.DrawPath(pen, path);
+                }
+            }
+
+            base.OnPaint(e);
+        }
+    }
+
+    public class GlassButton : Button
+    {
+        private bool isHovered = false;
+        private bool isPressed = false;
+
+        public Color BaseColor { get; set; }
+        public Color HoverColor { get; set; }
+        public Color PressedColor { get; set; }
+        public Color BorderLineColor { get; set; }
+        public int CornerRadius { get; set; }
+
+        public GlassButton()
+        {
+            SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.UserPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw, true);
+            BaseColor = Color.FromArgb(30, 41, 59);
+            HoverColor = Color.FromArgb(51, 65, 85);
+            PressedColor = Color.FromArgb(15, 23, 42);
+            BorderLineColor = Color.FromArgb(71, 85, 105);
+            CornerRadius = 8;
+            ForeColor = UITheme.TextPrimary;
+            Font = new Font("Segoe UI Semibold", 9.5f, FontStyle.Bold);
+            Cursor = Cursors.Hand;
+            UseMnemonic = false;
+        }
+
+        protected override void OnMouseEnter(EventArgs e)
+        {
+            base.OnMouseEnter(e);
+            isHovered = true;
+            Invalidate();
+        }
+
+        protected override void OnMouseLeave(EventArgs e)
+        {
+            base.OnMouseLeave(e);
+            isHovered = false;
+            Invalidate();
+        }
+
+        protected override void OnMouseDown(MouseEventArgs mevent)
+        {
+            base.OnMouseDown(mevent);
+            isPressed = true;
+            Invalidate();
+        }
+
+        protected override void OnMouseUp(MouseEventArgs mevent)
+        {
+            base.OnMouseUp(mevent);
+            isPressed = false;
+            Invalidate();
+        }
+
+        protected override void OnPaint(PaintEventArgs pevent)
+        {
+            Graphics g = pevent.Graphics;
+            g.SmoothingMode = SmoothingMode.AntiAlias;
+
+            Rectangle rect = new Rectangle(1, 1, Width - 3, Height - 3);
+            if (rect.Width <= 2 || rect.Height <= 2) return;
+
+            Color fill = !Enabled ? Color.FromArgb(20, 28, 42) : (isPressed ? PressedColor : (isHovered ? HoverColor : BaseColor));
+            Color border = !Enabled ? Color.FromArgb(35, 45, 60) : BorderLineColor;
+            Color textCol = !Enabled ? UITheme.TextMuted : ForeColor;
+
+            using (GraphicsPath path = UITheme.CreateRoundedPath(rect, CornerRadius))
+            {
+                using (SolidBrush brush = new SolidBrush(fill))
+                {
+                    g.FillPath(brush, path);
+                }
+
+                if (Enabled && rect.Height > 14)
+                {
+                    Rectangle sheenRect = new Rectangle(rect.X + 1, rect.Y + 1, rect.Width - 2, rect.Height / 2);
+                    using (LinearGradientBrush sheen = new LinearGradientBrush(
+                        sheenRect,
+                        Color.FromArgb(26, 255, 255, 255),
+                        Color.FromArgb(0, 255, 255, 255),
+                        LinearGradientMode.Vertical))
+                    {
+                        using (GraphicsPath sheenPath = UITheme.CreateTopRoundedPath(sheenRect, CornerRadius))
+                        {
+                            g.FillPath(sheen, sheenPath);
+                        }
+                    }
+                }
+
+                using (Pen pen = new Pen(border, 1.2f))
+                {
+                    g.DrawPath(pen, path);
+                }
+            }
+
+            TextFormatFlags flags = TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.WordBreak;
+            Rectangle textRect = new Rectangle(6, 4, Width - 12, Height - 8);
+            TextRenderer.DrawText(g, Text, Font, textRect, textCol, flags);
         }
     }
     #endregion
@@ -156,8 +380,8 @@ namespace Win11UpdateBlocker
     {
         public string ServiceName { get; set; }
         public string DisplayName { get; set; }
-        public string StartMode { get; set; } // Automatic, Manual, Disabled, Unknown
-        public string Status { get; set; }    // Running, Stopped, NotInstalled
+        public string StartMode { get; set; }
+        public string Status { get; set; }
     }
 
     public class SystemStatusSnapshot
@@ -214,15 +438,9 @@ namespace Win11UpdateBlocker
                     if (key != null)
                     {
                         object val = key.GetValue("DisplayVersion");
-                        if (val != null)
-                        {
-                            return val.ToString();
-                        }
+                        if (val != null) return val.ToString();
                         val = key.GetValue("ReleaseId");
-                        if (val != null)
-                        {
-                            return val.ToString();
-                        }
+                        if (val != null) return val.ToString();
                     }
                 }
             }
@@ -236,7 +454,7 @@ namespace Win11UpdateBlocker
         {
             SystemStatusSnapshot snapshot = new SystemStatusSnapshot();
 
-            // 1. Periksa Pause 2077
+            // 1. Status Pause 2077
             try
             {
                 using (RegistryKey key = Registry.LocalMachine.OpenSubKey(REG_UX_SETTINGS, false))
@@ -265,7 +483,7 @@ namespace Win11UpdateBlocker
                 snapshot.PauseExpiryString = "Tidak Dijeda";
             }
 
-            // 2. Periksa Group Policy
+            // 2. Status Group Policy
             try
             {
                 using (RegistryKey keyAU = Registry.LocalMachine.OpenSubKey(REG_POLICY_AU, false))
@@ -308,7 +526,7 @@ namespace Win11UpdateBlocker
             {
             }
 
-            // 3. Periksa Status Services
+            // 3. Status Layanan Windows
             int disabledCount = 0;
             foreach (string svcName in TARGET_SERVICES)
             {
@@ -351,7 +569,7 @@ namespace Win11UpdateBlocker
                         }
                         else
                         {
-                            item.StartMode = "Not Installed";
+                            item.StartMode = "Tidak Terpasang";
                         }
                     }
                 }
@@ -369,7 +587,7 @@ namespace Win11UpdateBlocker
                 }
                 catch
                 {
-                    item.Status = "Stopped / Not Found";
+                    item.Status = "Stopped";
                 }
 
                 snapshot.Services.Add(item);
@@ -380,17 +598,15 @@ namespace Win11UpdateBlocker
                 snapshot.IsTotalLockdown = true;
             }
 
-            // 4. Hitung Cache Download
             snapshot.CacheSizeBytes = CalculateCacheSize();
-
             return snapshot;
         }
 
         private static string GetServiceFriendlyName(string name)
         {
             if (name == "wuauserv") return "Windows Update (wuauserv)";
-            if (name == "UsoSvc") return "Update Orchestrator Service (UsoSvc)";
-            if (name == "WaaSMedicSvc") return "Windows Update Medic Service (WaaSMedicSvc)";
+            if (name == "UsoSvc") return "Update Orchestrator (UsoSvc)";
+            if (name == "WaaSMedicSvc") return "Update Medic Service (WaaSMedicSvc)";
             if (name == "BITS") return "Background Intelligent Transfer (BITS)";
             if (name == "DoSvc") return "Delivery Optimization (DoSvc)";
             return name;
@@ -398,9 +614,8 @@ namespace Win11UpdateBlocker
 
         public static void ApplySmartPause2077(bool excludeDrivers, Action<string> log)
         {
-            log("=== MEMULAI MODE 1: SMART PAUSE 2077 (STORE & DEFENDER AMAN) ===");
+            log("[MODE 1] Menerapkan Smart Pause 2077: Proteksi aktif, Store dan Defender tetap aman...");
 
-            // 1. Tulis jeda update s/d 2077
             try
             {
                 using (RegistryKey key = Registry.LocalMachine.CreateSubKey(REG_UX_SETTINGS))
@@ -418,16 +633,15 @@ namespace Win11UpdateBlocker
                         key.SetValue("PauseUpdatesStartTime", nowUtc, RegistryValueKind.String);
                         key.SetValue("PauseUpdatesExpiryTime", expiry2077, RegistryValueKind.String);
 
-                        log("[OK] Tanggal Pause Update dikunci ke: 2077-12-31T23:59:59Z");
+                        log("[OK] Tanggal Pause Update dikunci ke: 2077-12-31");
                     }
                 }
             }
             catch (Exception ex)
             {
-                log("[GALAT] Gagal menulis registry Pause 2077: " + ex.Message);
+                log("[GALAT] Registry Pause 2077: " + ex.Message);
             }
 
-            // 2. Kunci Group Policy (Target Release Version + NoAutoUpdate)
             try
             {
                 string winVer = GetWindowsVersionDisplay();
@@ -438,19 +652,19 @@ namespace Win11UpdateBlocker
                         keyWU.SetValue("TargetReleaseVersion", 1, RegistryValueKind.DWord);
                         keyWU.SetValue("TargetReleaseVersionInfo", winVer, RegistryValueKind.String);
                         keyWU.SetValue("ProductVersion", "Windows 11", RegistryValueKind.String);
-                        keyWU.SetValue("SetDisableUXWUAccess", 0, RegistryValueKind.DWord); // Izinkan UI Store
+                        keyWU.SetValue("SetDisableUXWUAccess", 0, RegistryValueKind.DWord);
 
                         if (excludeDrivers)
                         {
                             keyWU.SetValue("ExcludeWUDriversInQualityUpdate", 1, RegistryValueKind.DWord);
-                            log("[OK] Blokir Driver Update Otomatis: Diaktifkan");
+                            log("[OK] Blokir Driver Otomatis diaktifkan.");
                         }
                         else
                         {
                             keyWU.DeleteValue("ExcludeWUDriversInQualityUpdate", false);
                         }
 
-                        log("[OK] Group Policy Target Release dikunci ke: Windows 11 " + winVer);
+                        log("[OK] Group Policy Target Release: Windows 11 " + winVer);
                     }
                 }
 
@@ -459,38 +673,34 @@ namespace Win11UpdateBlocker
                     if (keyAU != null)
                     {
                         keyAU.SetValue("NoAutoUpdate", 1, RegistryValueKind.DWord);
-                        keyAU.SetValue("AUOptions", 2, RegistryValueKind.DWord); // Pemberitahuan unduh
-                        log("[OK] Group Policy NoAutoUpdate disetel ke: 1 (Nonaktifkan Otomatis)");
+                        keyAU.SetValue("AUOptions", 2, RegistryValueKind.DWord);
+                        log("[OK] Group Policy NoAutoUpdate: 1 (Dinonaktifkan)");
                     }
                 }
             }
             catch (Exception ex)
             {
-                log("[GALAT] Gagal mengatur Group Policy: " + ex.Message);
+                log("[GALAT] Group Policy: " + ex.Message);
             }
 
-            // 3. Konfigurasi Services:
-            // Mode 1: Matikan WaaSMedicSvc & UsoSvc (remediasi & orkestrator)
-            // Biarkan wuauserv, BITS, DoSvc tetap MANUAL agar Microsoft Store & Defender jalan normal!
-            log("[INFO] Mengatur Service: Mematikan WaaSMedicSvc & UsoSvc, mengizinkan Store...");
+            // Mode 1: Matikan WaaSMedicSvc dan UsoSvc
+            // Biarkan wuauserv, BITS, DoSvc pada posisi MANUAL agar Store dan Defender normal
+            log("[INFO] Mengatur layanan: Mematikan WaaSMedicSvc dan UsoSvc...");
             SetServiceStartMode("WaaSMedicSvc", 4, true, log);
             SetServiceStartMode("UsoSvc", 4, true, log);
 
-            SetServiceStartMode("wuauserv", 3, false, log); // Manual
-            SetServiceStartMode("BITS", 3, false, log);     // Manual
-            SetServiceStartMode("DoSvc", 3, false, log);    // Manual
+            SetServiceStartMode("wuauserv", 3, false, log);
+            SetServiceStartMode("BITS", 3, false, log);
+            SetServiceStartMode("DoSvc", 3, false, log);
 
-            // 4. Matikan Scheduled Tasks
             DisableScheduledTasks(log);
-
-            log("=== SELESAI: MODE 1 BERHASIL DITERAPKAN DENGAN SUKSES ===");
+            log("[SELESAI] Mode 1 aktif: Windows Update OS dijeda hingga 2077.");
         }
 
         public static void ApplyTotalLockdown(bool excludeDrivers, Action<string> log)
         {
-            log("=== MEMULAI MODE 2: TOTAL LOCKDOWN (100% MATIKAN SEMUA SERVICE) ===");
+            log("[MODE 2] Menerapkan Total Lockdown: Mematikan seluruh 5 layanan Windows Update...");
 
-            // 1. Tulis jeda update s/d 2077 & Group Policy
             try
             {
                 using (RegistryKey key = Registry.LocalMachine.CreateSubKey(REG_UX_SETTINGS))
@@ -518,14 +728,14 @@ namespace Win11UpdateBlocker
                         keyWU.SetValue("TargetReleaseVersion", 1, RegistryValueKind.DWord);
                         keyWU.SetValue("TargetReleaseVersionInfo", winVer, RegistryValueKind.String);
                         keyWU.SetValue("ProductVersion", "Windows 11", RegistryValueKind.String);
-                        keyWU.SetValue("SetDisableUXWUAccess", 1, RegistryValueKind.DWord); // Kunci akses menu WU
+                        keyWU.SetValue("SetDisableUXWUAccess", 1, RegistryValueKind.DWord);
 
                         if (excludeDrivers)
                         {
                             keyWU.SetValue("ExcludeWUDriversInQualityUpdate", 1, RegistryValueKind.DWord);
                         }
 
-                        log("[OK] Group Policy Kunci Total diterapkan (TargetRelease + SetDisableUXWUAccess = 1)");
+                        log("[OK] Akses UI Windows Update dikunci total (SetDisableUXWUAccess = 1).");
                     }
                 }
 
@@ -540,27 +750,22 @@ namespace Win11UpdateBlocker
             }
             catch (Exception ex)
             {
-                log("[GALAT] Gagal menulis konfigurasi policy lockdown: " + ex.Message);
+                log("[GALAT] Konfigurasi Lockdown: " + ex.Message);
             }
 
-            // 2. Matikan SEMUA 5 Service
-            log("[INFO] Mematikan dan menonaktifkan seluruh 5 Windows Update Services...");
             foreach (string svcName in TARGET_SERVICES)
             {
                 SetServiceStartMode(svcName, 4, true, log);
             }
 
-            // 3. Matikan Scheduled Tasks
             DisableScheduledTasks(log);
-
-            log("=== SELESAI: MODE 2 TOTAL LOCKDOWN AKTIF (Windows Update Mati Total) ===");
+            log("[SELESAI] Mode 2 Total Lockdown aktif: Semua layanan Windows Update mati total.");
         }
 
         public static void RestoreDefault(Action<string> log)
         {
-            log("=== MEMULAI RESTORE DEFAULT WINDOWS 11 ===");
+            log("[RESTORE] Memulihkan seluruh konfigurasi ke standar Windows 11...");
 
-            // 1. Hapus jeda update di UX Settings
             try
             {
                 using (RegistryKey key = Registry.LocalMachine.OpenSubKey(REG_UX_SETTINGS, true))
@@ -574,16 +779,15 @@ namespace Win11UpdateBlocker
                         key.DeleteValue("PauseQualityUpdatesEndTime", false);
                         key.DeleteValue("PauseUpdatesStartTime", false);
                         key.DeleteValue("PauseUpdatesExpiryTime", false);
-                        log("[OK] Pengaturan Pause Update UX Settings dikembalikan ke default");
+                        log("[OK] Pengaturan jeda waktu UX Settings dikembalikan.");
                     }
                 }
             }
             catch (Exception ex)
             {
-                log("[PERINGATAN] Gagal menghapus registry UX Settings: " + ex.Message);
+                log("[PERINGATAN] Registry UX Settings: " + ex.Message);
             }
 
-            // 2. Hapus Group Policy
             try
             {
                 using (RegistryKey keyWU = Registry.LocalMachine.OpenSubKey(REG_POLICY_WU, true))
@@ -595,7 +799,7 @@ namespace Win11UpdateBlocker
                         keyWU.DeleteValue("ProductVersion", false);
                         keyWU.DeleteValue("SetDisableUXWUAccess", false);
                         keyWU.DeleteValue("ExcludeWUDriversInQualityUpdate", false);
-                        log("[OK] Group Policy WindowsUpdate dikembalikan ke default");
+                        log("[OK] Group Policy WindowsUpdate dikembalikan.");
                     }
                 }
 
@@ -605,27 +809,24 @@ namespace Win11UpdateBlocker
                     {
                         keyAU.DeleteValue("NoAutoUpdate", false);
                         keyAU.DeleteValue("AUOptions", false);
-                        log("[OK] Group Policy AU dikembalikan ke default");
+                        log("[OK] Group Policy AU dikembalikan.");
                     }
                 }
             }
             catch (Exception ex)
             {
-                log("[PERINGATAN] Gagal menghapus Group Policy: " + ex.Message);
+                log("[PERINGATAN] Group Policy: " + ex.Message);
             }
 
-            // 3. Kembalikan Startup Service ke default Windows 11
-            log("[INFO] Mengembalikan Startup Mode Services Windows 11...");
-            SetServiceStartMode("wuauserv", 3, false, log);     // Manual
-            SetServiceStartMode("BITS", 3, false, log);         // Manual
-            SetServiceStartMode("DoSvc", 2, false, log);        // Automatic
-            SetServiceStartMode("UsoSvc", 2, false, log);       // Automatic
-            SetServiceStartMode("WaaSMedicSvc", 3, false, log); // Manual
+            log("[INFO] Mengembalikan status layanan ke pengaturan bawaan Windows 11...");
+            SetServiceStartMode("wuauserv", 3, false, log);
+            SetServiceStartMode("BITS", 3, false, log);
+            SetServiceStartMode("DoSvc", 2, false, log);
+            SetServiceStartMode("UsoSvc", 2, false, log);
+            SetServiceStartMode("WaaSMedicSvc", 3, false, log);
 
-            // 4. Aktifkan kembali Scheduled Tasks
             EnableScheduledTasks(log);
-
-            log("=== SELESAI: PENGATURAN DEFAULT WINDOWS 11 BERHASIL DIPULIHKAN ===");
+            log("[SELESAI] Konfigurasi standar Windows 11 berhasil dipulihkan.");
         }
 
         public static void SetDriverBlockPolicy(bool block, Action<string> log)
@@ -651,7 +852,7 @@ namespace Win11UpdateBlocker
             }
             catch (Exception ex)
             {
-                log("[GALAT] Gagal mengubah opsi driver update: " + ex.Message);
+                log("[GALAT] Opsi Driver Update: " + ex.Message);
             }
         }
 
@@ -659,7 +860,6 @@ namespace Win11UpdateBlocker
         {
             string svcPath = REG_SERVICES_BASE + @"\" + serviceName;
 
-            // Jika WaaSMedicSvc, buka kepemilikan terlebih dahulu
             if (serviceName.Equals("WaaSMedicSvc", StringComparison.OrdinalIgnoreCase))
             {
                 PrivilegeManager.GrantFullControlToRegistryKey(svcPath);
@@ -675,7 +875,6 @@ namespace Win11UpdateBlocker
                         {
                             key.SetValue("Start", startMode, RegistryValueKind.DWord);
 
-                            // Jika di-disable, hapus FailureActions agar service tidak bangkit sendiri
                             if (startMode == 4)
                             {
                                 try
@@ -688,18 +887,18 @@ namespace Win11UpdateBlocker
                             }
 
                             string modeDesc = (startMode == 4) ? "Disabled (4)" : (startMode == 3) ? "Manual (3)" : "Automatic (2)";
-                            log(string.Format("[OK] Service {0} disetel ke {1}", serviceName, modeDesc));
+                            log(string.Format("[OK] Layanan {0} disetel ke {1}", serviceName, modeDesc));
                         }
                         else
                         {
-                            log(string.Format("[PERINGATAN] Service key {0} tidak ditemukan di Registry.", serviceName));
+                            log(string.Format("[PERINGATAN] Layanan {0} tidak ditemukan di registry.", serviceName));
                         }
                     }
                 }
             }
             catch (Exception ex)
             {
-                log(string.Format("[GALAT] Gagal menulis Start mode untuk {0}: {1}", serviceName, ex.Message));
+                log(string.Format("[GALAT] Pengaturan {0}: {1}", serviceName, ex.Message));
             }
 
             if (stopIfRunning)
@@ -718,13 +917,12 @@ namespace Win11UpdateBlocker
                     {
                         sc.Stop();
                         sc.WaitForStatus(ServiceControllerStatus.Stopped, TimeSpan.FromSeconds(4));
-                        log(string.Format("[OK] Service {0} berhasil dihentikan.", serviceName));
+                        log(string.Format("[OK] Layanan {0} berhasil dihentikan.", serviceName));
                     }
                 }
             }
             catch
             {
-                // Bila ServiceController timeout atau butuh paksa, panggil sc stop
                 try
                 {
                     ProcessStartInfo psi = new ProcessStartInfo("sc.exe", "stop " + serviceName);
@@ -743,7 +941,7 @@ namespace Win11UpdateBlocker
 
         private static void DisableScheduledTasks(Action<string> log)
         {
-            log("[INFO] Menonaktifkan Scheduled Tasks terkait pembaruan otomatis...");
+            log("[INFO] Menonaktifkan tugas terjadwal pembaruan...");
             foreach (string task in TARGET_TASKS)
             {
                 RunSchtasks(task, false, log);
@@ -752,7 +950,7 @@ namespace Win11UpdateBlocker
 
         private static void EnableScheduledTasks(Action<string> log)
         {
-            log("[INFO] Mengaktifkan kembali Scheduled Tasks...");
+            log("[INFO] Mengaktifkan kembali tugas terjadwal pembaruan...");
             foreach (string task in TARGET_TASKS)
             {
                 RunSchtasks(task, true, log);
@@ -774,10 +972,10 @@ namespace Win11UpdateBlocker
                 {
                     if (p != null)
                     {
-                        p.WaitForExit(4000);
+                        p.WaitForExit(3500);
                         if (p.ExitCode == 0)
                         {
-                            log(string.Format("[OK] Task: {0} -> {1}", taskPath, enable ? "Aktif" : "Nonaktif"));
+                            log(string.Format("[OK] Task {0} -> {1}", taskPath, enable ? "Aktif" : "Nonaktif"));
                         }
                     }
                 }
@@ -795,10 +993,7 @@ namespace Win11UpdateBlocker
                 string windir = Environment.GetFolderPath(Environment.SpecialFolder.Windows);
                 string downloadPath = Path.Combine(windir, @"SoftwareDistribution\Download");
 
-                if (!Directory.Exists(downloadPath))
-                {
-                    return 0;
-                }
+                if (!Directory.Exists(downloadPath)) return 0;
 
                 long totalBytes = 0;
                 DirectoryInfo di = new DirectoryInfo(downloadPath);
@@ -829,7 +1024,7 @@ namespace Win11UpdateBlocker
 
         public static void ClearCache(Action<string> log)
         {
-            log("=== MEMULAI PEMBERSIHAN CACHE SOFTWARE DISTRIBUTION ===");
+            log("[CACHE] Membersihkan direktori SoftwareDistribution\\Download...");
 
             string windir = Environment.GetFolderPath(Environment.SpecialFolder.Windows);
             string downloadPath = Path.Combine(windir, @"SoftwareDistribution\Download");
@@ -843,85 +1038,94 @@ namespace Win11UpdateBlocker
             long beforeBytes = CalculateCacheSize();
             log(string.Format("[INFO] Ukuran cache saat ini: {0}", FormatBytes(beforeBytes)));
 
-            // Hentikan wuauserv & BITS sementara agar berkas tidak terkunci
-            log("[INFO] Menghentikan sementara wuauserv & BITS agar berkas tidak terkunci...");
             StopServiceSafely("wuauserv", log);
             StopServiceSafely("BITS", log);
 
             int deletedFiles = 0;
-            int failedFiles = 0;
-
             try
             {
                 DirectoryInfo di = new DirectoryInfo(downloadPath);
                 FileInfo[] files = di.GetFiles();
                 for (int i = 0; i < files.Length; i++)
                 {
-                    try
-                    {
-                        files[i].Delete();
-                        deletedFiles++;
-                    }
-                    catch
-                    {
-                        failedFiles++;
-                    }
+                    try { files[i].Delete(); deletedFiles++; } catch { }
                 }
 
                 DirectoryInfo[] dirs = di.GetDirectories();
                 for (int i = 0; i < dirs.Length; i++)
                 {
-                    try
-                    {
-                        dirs[i].Delete(true);
-                    }
-                    catch
-                    {
-                        failedFiles++;
-                    }
+                    try { dirs[i].Delete(true); } catch { }
                 }
             }
             catch (Exception ex)
             {
-                log("[GALAT] Gagal membersihkan direktori cache: " + ex.Message);
+                log("[GALAT] Pembersihan direktori: " + ex.Message);
             }
 
             long afterBytes = CalculateCacheSize();
             long freedBytes = beforeBytes - afterBytes;
             if (freedBytes < 0) freedBytes = 0;
 
-            log(string.Format("[OK] Pembersihan selesai! {0} berkas dihapus. Ruang disk dibebaskan: {1}",
+            log(string.Format("[OK] Pembersihan selesai. Berkas terhapus: {0}. Ruang dibebaskan: {1}",
                 deletedFiles, FormatBytes(freedBytes)));
-            log("=== SELESAI PEMBERSIHAN CACHE ===");
         }
     }
     #endregion
 
-    #region Antarmuka Pengguna (WinForms GUI)
+    #region Antarmuka Pengguna Modern Minimalis-Slate
     public class MainForm : Form
     {
+        // Header
         private Panel panelHeader;
+        private Label lblLogoIcon;
         private Label lblTitle;
         private Label lblSubtitle;
         private Label lblOverallBadge;
 
-        private GroupBox grpStatus;
+        // Container scrollable agar tidak tumpang tindih pada resolusi/DPI apa pun
+        private Panel panelBody;
+
+        // Kartu Ringkasan Status
+        private GlassPanel cardPause;
+        private Label lblPauseHeading;
+        private Label lblPauseValue;
+        private Label lblPauseDetail;
+
+        private GlassPanel cardPolicy;
+        private Label lblPolicyHeading;
+        private Label lblPolicyValue;
+        private Label lblPolicyDetail;
+
+        private GlassPanel cardCache;
+        private Label lblCacheHeading;
+        private Label lblCacheValue;
+        private Label lblCacheDetail;
+
+        // Tabel Layanan Glass
+        private GlassPanel panelServicesCard;
+        private Label lblServicesTitle;
         private ListView lstServices;
-        private Label lblPauseStatus;
-        private Label lblPolicyStatus;
-        private Label lblCacheStatus;
+        private ColumnHeader colName;
+        private ColumnHeader colStartup;
+        private ColumnHeader colStatus;
+        private ColumnHeader colProtection;
 
-        private GroupBox grpActions;
-        private Button btnSmartPause;
-        private Button btnTotalLock;
-        private Button btnRestore;
-        private Button btnCleanCache;
-        private Button btnRefresh;
+        // Kontrol Aksi
+        private GlassPanel panelActionsCard;
+        private Label lblActionsTitle;
+        private GlassButton btnSmartPause;
+        private GlassButton btnTotalLock;
+        private GlassButton btnRestore;
         private CheckBox chkBlockDrivers;
+        private GlassButton btnCleanCache;
+        private GlassButton btnRefresh;
 
-        private GroupBox grpLog;
+        // Log Aktivitas
+        private GlassPanel panelLogCard;
+        private Label lblLogTitle;
         private TextBox txtLog;
 
+        // Status Bar
         private StatusStrip statusStrip;
         private ToolStripStatusLabel statusAdmin;
         private ToolStripStatusLabel statusOsVersion;
@@ -930,239 +1134,572 @@ namespace Win11UpdateBlocker
 
         public MainForm()
         {
+            this.SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.UserPaint | ControlStyles.OptimizedDoubleBuffer, true);
             InitializeComponent();
             RefreshSystemStatus();
-            LogMessage("Aplikasi siap. Silakan pilih salah satu opsi di atas.");
+            LogMessage("Sistem siap. Pilih salah satu mode kontrol di bawah.");
         }
 
         private void InitializeComponent()
         {
             this.SuspendLayout();
 
-            this.Text = "Windows 11 Update Blocker v1.0 — Kontrol Permanen & Aman";
-            this.Size = new Size(860, 720);
-            this.MinimumSize = new Size(800, 650);
+            // Form Properties
+            this.Text = "Windows 11 Update Blocker v1.0: Kontrol Permanen & Aman";
+            this.Size = new Size(930, 800);
+            this.MinimumSize = new Size(880, 720);
             this.StartPosition = FormStartPosition.CenterScreen;
-            this.BackColor = Color.FromArgb(244, 246, 249);
-            this.Font = new Font("Segoe UI", 9.5f, FontStyle.Regular);
+            this.BackColor = UITheme.BgApp;
+            this.ForeColor = UITheme.TextPrimary;
+            this.Font = new Font("Segoe UI", 9.25f, FontStyle.Regular);
+            this.Icon = SystemIcons.Shield;
 
             // 1. Header Banner
             panelHeader = new Panel();
             panelHeader.Dock = DockStyle.Top;
-            panelHeader.Height = 85;
-            panelHeader.BackColor = Color.FromArgb(28, 35, 49);
-            panelHeader.Padding = new Padding(18, 12, 18, 12);
+            panelHeader.Height = 84;
+            panelHeader.BackColor = UITheme.BgHeader;
+            panelHeader.Padding = new Padding(20, 12, 20, 12);
+            panelHeader.Paint += new PaintEventHandler(PanelHeader_Paint);
+
+            lblLogoIcon = new Label();
+            lblLogoIcon.Text = "🛡️";
+            lblLogoIcon.Font = new Font("Segoe UI Emoji", 20f, FontStyle.Regular);
+            lblLogoIcon.ForeColor = UITheme.EmeraldText;
+            lblLogoIcon.AutoSize = true;
+            lblLogoIcon.Location = new Point(18, 18);
 
             lblTitle = new Label();
-            lblTitle.Text = "🛡️ Windows 11 Update Blocker";
-            lblTitle.Font = new Font("Segoe UI Semibold", 16f, FontStyle.Bold);
-            lblTitle.ForeColor = Color.White;
+            lblTitle.Text = "Windows 11 Update Blocker";
+            lblTitle.Font = new Font("Segoe UI Semibold", 15f, FontStyle.Bold);
+            lblTitle.ForeColor = UITheme.TextPrimary;
             lblTitle.AutoSize = true;
-            lblTitle.Location = new Point(16, 12);
+            lblTitle.Location = new Point(62, 14);
 
             lblSubtitle = new Label();
-            lblSubtitle.Text = "Blokir permanen pembaruan Windows 11 tanpa merusak Microsoft Store & Defender";
-            lblSubtitle.Font = new Font("Segoe UI", 9.5f, FontStyle.Regular);
-            lblSubtitle.ForeColor = Color.FromArgb(170, 185, 205);
+            lblSubtitle.Text = "Kontrol pembaruan otomatis tanpa mengganggu Microsoft Store & Windows Defender";
+            lblSubtitle.Font = new Font("Segoe UI", 9f, FontStyle.Regular);
+            lblSubtitle.ForeColor = UITheme.TextSecondary;
             lblSubtitle.AutoSize = true;
-            lblSubtitle.Location = new Point(20, 46);
+            lblSubtitle.Location = new Point(65, 46);
 
             lblOverallBadge = new Label();
             lblOverallBadge.Text = "MEMERIKSA STATUS...";
-            lblOverallBadge.Font = new Font("Segoe UI Bold", 10.5f, FontStyle.Bold);
-            lblOverallBadge.ForeColor = Color.White;
-            lblOverallBadge.BackColor = Color.FromArgb(70, 80, 95);
+            lblOverallBadge.Font = new Font("Segoe UI Semibold", 9.5f, FontStyle.Bold);
+            lblOverallBadge.ForeColor = UITheme.AmberText;
+            lblOverallBadge.BackColor = UITheme.AmberBg;
             lblOverallBadge.TextAlign = ContentAlignment.MiddleCenter;
             lblOverallBadge.Size = new Size(230, 36);
             lblOverallBadge.Anchor = AnchorStyles.Top | AnchorStyles.Right;
-            lblOverallBadge.Location = new Point(panelHeader.Width - 255, 24);
+            lblOverallBadge.Location = new Point(panelHeader.Width - 250, 24);
+            lblOverallBadge.Paint += new PaintEventHandler(Badge_Paint);
 
+            panelHeader.Controls.Add(lblLogoIcon);
             panelHeader.Controls.Add(lblTitle);
             panelHeader.Controls.Add(lblSubtitle);
             panelHeader.Controls.Add(lblOverallBadge);
 
-            // 2. Status GroupBox
-            grpStatus = new GroupBox();
-            grpStatus.Text = "📊 Status Proteksi & Layanan Sistem";
-            grpStatus.Font = new Font("Segoe UI Semibold", 10f, FontStyle.Bold);
-            grpStatus.ForeColor = Color.FromArgb(30, 41, 59);
-            grpStatus.Location = new Point(18, 95);
-            grpStatus.Size = new Size(808, 190);
-            grpStatus.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
+            // 2. Body Panel (Scrollable, Padding rapi)
+            panelBody = new Panel();
+            panelBody.Dock = DockStyle.Fill;
+            panelBody.AutoScroll = true;
+            panelBody.Padding = new Padding(20, 16, 20, 16);
+            panelBody.BackColor = UITheme.BgApp;
 
-            lblPauseStatus = new Label();
-            lblPauseStatus.Font = new Font("Segoe UI", 9.5f, FontStyle.Regular);
-            lblPauseStatus.Location = new Point(16, 26);
-            lblPauseStatus.Size = new Size(380, 22);
-            lblPauseStatus.Text = "Status Pause: Memuat...";
+            // --- BARIS 1: 3 KARTU STATUS (Pause, Policy, Cache) ---
+            int cardW = 278;
+            int cardH = 92;
 
-            lblPolicyStatus = new Label();
-            lblPolicyStatus.Font = new Font("Segoe UI", 9.5f, FontStyle.Regular);
-            lblPolicyStatus.Location = new Point(410, 26);
-            lblPolicyStatus.Size = new Size(380, 22);
-            lblPolicyStatus.Text = "Group Policy: Memuat...";
+            // Card 1: Jeda Pembaruan
+            cardPause = new GlassPanel();
+            cardPause.Location = new Point(20, 14);
+            cardPause.Size = new Size(cardW, cardH);
+            cardPause.Padding = new Padding(12, 10, 12, 10);
 
-            lblCacheStatus = new Label();
-            lblCacheStatus.Font = new Font("Segoe UI", 9.5f, FontStyle.Regular);
-            lblCacheStatus.Location = new Point(16, 50);
-            lblCacheStatus.Size = new Size(760, 22);
-            lblCacheStatus.Text = "Cache Unduhan: Memuat...";
+            lblPauseHeading = new Label();
+            lblPauseHeading.Text = "JEDA PEMBARUAN";
+            lblPauseHeading.Font = new Font("Segoe UI Semibold", 8f, FontStyle.Bold);
+            lblPauseHeading.ForeColor = UITheme.TextSecondary;
+            lblPauseHeading.AutoSize = true;
+            lblPauseHeading.Location = new Point(12, 10);
+
+            lblPauseValue = new Label();
+            lblPauseValue.Text = "Memeriksa...";
+            lblPauseValue.Font = new Font("Segoe UI Semibold", 11.5f, FontStyle.Bold);
+            lblPauseValue.ForeColor = UITheme.TextPrimary;
+            lblPauseValue.AutoSize = true;
+            lblPauseValue.Location = new Point(12, 32);
+
+            lblPauseDetail = new Label();
+            lblPauseDetail.Text = "Target UX Settings";
+            lblPauseDetail.Font = new Font("Segoe UI", 8f);
+            lblPauseDetail.ForeColor = UITheme.TextMuted;
+            lblPauseDetail.AutoSize = true;
+            lblPauseDetail.Location = new Point(12, 62);
+
+            cardPause.Controls.Add(lblPauseHeading);
+            cardPause.Controls.Add(lblPauseValue);
+            cardPause.Controls.Add(lblPauseDetail);
+
+            // Card 2: Group Policy
+            cardPolicy = new GlassPanel();
+            cardPolicy.Location = new Point(310, 14);
+            cardPolicy.Size = new Size(cardW, cardH);
+            cardPolicy.Padding = new Padding(12, 10, 12, 10);
+
+            lblPolicyHeading = new Label();
+            lblPolicyHeading.Text = "GROUP POLICY & TARGET";
+            lblPolicyHeading.Font = new Font("Segoe UI Semibold", 8f, FontStyle.Bold);
+            lblPolicyHeading.ForeColor = UITheme.TextSecondary;
+            lblPolicyHeading.AutoSize = true;
+            lblPolicyHeading.Location = new Point(12, 10);
+
+            lblPolicyValue = new Label();
+            lblPolicyValue.Text = "Memeriksa...";
+            lblPolicyValue.Font = new Font("Segoe UI Semibold", 11.5f, FontStyle.Bold);
+            lblPolicyValue.ForeColor = UITheme.TextPrimary;
+            lblPolicyValue.AutoSize = true;
+            lblPolicyValue.Location = new Point(12, 32);
+
+            lblPolicyDetail = new Label();
+            lblPolicyDetail.Text = "Target Release: Standar";
+            lblPolicyDetail.Font = new Font("Segoe UI", 8f);
+            lblPolicyDetail.ForeColor = UITheme.TextMuted;
+            lblPolicyDetail.AutoSize = true;
+            lblPolicyDetail.Location = new Point(12, 62);
+
+            cardPolicy.Controls.Add(lblPolicyHeading);
+            cardPolicy.Controls.Add(lblPolicyValue);
+            cardPolicy.Controls.Add(lblPolicyDetail);
+
+            // Card 3: Cache Unduhan
+            cardCache = new GlassPanel();
+            cardCache.Location = new Point(600, 14);
+            cardCache.Size = new Size(cardW, cardH);
+            cardCache.Padding = new Padding(12, 10, 12, 10);
+
+            lblCacheHeading = new Label();
+            lblCacheHeading.Text = "CACHE SOFTWARE DISTRIBUTION";
+            lblCacheHeading.Font = new Font("Segoe UI Semibold", 8f, FontStyle.Bold);
+            lblCacheHeading.ForeColor = UITheme.TextSecondary;
+            lblCacheHeading.AutoSize = true;
+            lblCacheHeading.Location = new Point(12, 10);
+
+            lblCacheValue = new Label();
+            lblCacheValue.Text = "0 MB";
+            lblCacheValue.Font = new Font("Segoe UI Semibold", 11.5f, FontStyle.Bold);
+            lblCacheValue.ForeColor = UITheme.SkyText;
+            lblCacheValue.AutoSize = true;
+            lblCacheValue.Location = new Point(12, 32);
+
+            lblCacheDetail = new Label();
+            lblCacheDetail.Text = "Ruang berkas sementara";
+            lblCacheDetail.Font = new Font("Segoe UI", 8f);
+            lblCacheDetail.ForeColor = UITheme.TextMuted;
+            lblCacheDetail.AutoSize = true;
+            lblCacheDetail.Location = new Point(12, 62);
+
+            cardCache.Controls.Add(lblCacheHeading);
+            cardCache.Controls.Add(lblCacheValue);
+            cardCache.Controls.Add(lblCacheDetail);
+
+            // --- BARIS 2: TABEL LAYANAN WINDOWS ---
+            panelServicesCard = new GlassPanel();
+            panelServicesCard.Location = new Point(20, 118);
+            panelServicesCard.Size = new Size(858, 174);
+            panelServicesCard.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
+
+            lblServicesTitle = new Label();
+            lblServicesTitle.Text = "Status Layanan Inti (5 Services)";
+            lblServicesTitle.Font = new Font("Segoe UI Semibold", 10f, FontStyle.Bold);
+            lblServicesTitle.ForeColor = UITheme.TextPrimary;
+            lblServicesTitle.Location = new Point(16, 10);
+            lblServicesTitle.AutoSize = true;
 
             lstServices = new ListView();
             lstServices.View = View.Details;
             lstServices.FullRowSelect = true;
-            lstServices.GridLines = true;
+            lstServices.GridLines = false;
+            lstServices.HeaderStyle = ColumnHeaderStyle.Nonclickable;
+            lstServices.Location = new Point(14, 38);
+            lstServices.Size = new Size(828, 122);
+            lstServices.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
+            lstServices.BackColor = UITheme.BgInput;
+            lstServices.ForeColor = UITheme.TextPrimary;
+            lstServices.BorderStyle = BorderStyle.None;
             lstServices.Font = new Font("Segoe UI", 9f);
-            lstServices.Location = new Point(16, 76);
-            lstServices.Size = new Size(776, 102);
-            lstServices.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
+            lstServices.OwnerDraw = true;
+            lstServices.DrawColumnHeader += new DrawListViewColumnHeaderEventHandler(LstServices_DrawColumnHeader);
+            lstServices.DrawItem += new DrawListViewItemEventHandler(LstServices_DrawItem);
+            lstServices.DrawSubItem += new DrawListViewSubItemEventHandler(LstServices_DrawSubItem);
+            lstServices.Resize += new EventHandler(LstServices_Resize);
 
-            lstServices.Columns.Add("Nama Layanan (Service)", 320);
-            lstServices.Columns.Add("Tipe Startup", 160);
-            lstServices.Columns.Add("Kondisi Berjalan", 150);
-            lstServices.Columns.Add("Indikator", 120);
+            colName = new ColumnHeader();
+            colName.Text = "Nama Layanan Windows";
+            colName.Width = 320;
 
-            grpStatus.Controls.Add(lblPauseStatus);
-            grpStatus.Controls.Add(lblPolicyStatus);
-            grpStatus.Controls.Add(lblCacheStatus);
-            grpStatus.Controls.Add(lstServices);
+            colStartup = new ColumnHeader();
+            colStartup.Text = "Tipe Startup";
+            colStartup.Width = 140;
 
-            // 3. Action GroupBox
-            grpActions = new GroupBox();
-            grpActions.Text = "⚡ Operasi & Mode Kontrol";
-            grpActions.Font = new Font("Segoe UI Semibold", 10f, FontStyle.Bold);
-            grpActions.ForeColor = Color.FromArgb(30, 41, 59);
-            grpActions.Location = new Point(18, 292);
-            grpActions.Size = new Size(808, 140);
-            grpActions.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
+            colStatus = new ColumnHeader();
+            colStatus.Text = "Kondisi Berjalan";
+            colStatus.Width = 140;
 
-            btnSmartPause = new Button();
+            colProtection = new ColumnHeader();
+            colProtection.Text = "Status Proteksi";
+            colProtection.Width = 200;
+
+            lstServices.Columns.AddRange(new ColumnHeader[] { colName, colStartup, colStatus, colProtection });
+
+            panelServicesCard.Controls.Add(lblServicesTitle);
+            panelServicesCard.Controls.Add(lstServices);
+
+            // --- BARIS 3: OPERASI KONTROL & TOMBOL GLASS ---
+            panelActionsCard = new GlassPanel();
+            panelActionsCard.Location = new Point(20, 304);
+            panelActionsCard.Size = new Size(858, 142);
+            panelActionsCard.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
+
+            lblActionsTitle = new Label();
+            lblActionsTitle.Text = "Operasi & Mode Proteksi";
+            lblActionsTitle.Font = new Font("Segoe UI Semibold", 10f, FontStyle.Bold);
+            lblActionsTitle.ForeColor = UITheme.TextPrimary;
+            lblActionsTitle.Location = new Point(16, 10);
+            lblActionsTitle.AutoSize = true;
+
+            // Tombol Mode 1 (Emerald Glass)
+            btnSmartPause = new GlassButton();
             btnSmartPause.Text = "Mode 1: Smart Pause 2077\r\n(Store & Defender Aman)";
-            btnSmartPause.Font = new Font("Segoe UI Semibold", 9.5f, FontStyle.Bold);
-            btnSmartPause.BackColor = Color.FromArgb(16, 124, 65); // Modern Green
-            btnSmartPause.ForeColor = Color.White;
-            btnSmartPause.FlatStyle = FlatStyle.Flat;
-            btnSmartPause.FlatAppearance.BorderSize = 0;
-            btnSmartPause.Location = new Point(16, 30);
-            btnSmartPause.Size = new Size(245, 50);
-            btnSmartPause.Cursor = Cursors.Hand;
+            btnSmartPause.BaseColor = UITheme.EmeraldBg;
+            btnSmartPause.HoverColor = Color.FromArgb(4, 120, 87);
+            btnSmartPause.PressedColor = Color.FromArgb(2, 44, 34);
+            btnSmartPause.BorderLineColor = UITheme.EmeraldBorder;
+            btnSmartPause.ForeColor = UITheme.EmeraldText;
+            btnSmartPause.Location = new Point(16, 36);
+            btnSmartPause.Size = new Size(260, 48);
             btnSmartPause.Click += new EventHandler(BtnSmartPause_Click);
 
-            btnTotalLock = new Button();
-            btnTotalLock.Text = "Mode 2: Total Lockdown\r\n(100% Matikan Semua Service)";
-            btnTotalLock.Font = new Font("Segoe UI Semibold", 9.5f, FontStyle.Bold);
-            btnTotalLock.BackColor = Color.FromArgb(196, 43, 28); // Modern Red
-            btnTotalLock.ForeColor = Color.White;
-            btnTotalLock.FlatStyle = FlatStyle.Flat;
-            btnTotalLock.FlatAppearance.BorderSize = 0;
-            btnTotalLock.Location = new Point(275, 30);
-            btnTotalLock.Size = new Size(245, 50);
-            btnTotalLock.Cursor = Cursors.Hand;
+            // Tombol Mode 2 (Rose Glass)
+            btnTotalLock = new GlassButton();
+            btnTotalLock.Text = "Mode 2: Total Lockdown\r\n(Matikan Seluruh Layanan)";
+            btnTotalLock.BaseColor = UITheme.RoseBg;
+            btnTotalLock.HoverColor = Color.FromArgb(159, 18, 57);
+            btnTotalLock.PressedColor = Color.FromArgb(76, 5, 25);
+            btnTotalLock.BorderLineColor = UITheme.RoseBorder;
+            btnTotalLock.ForeColor = UITheme.RoseText;
+            btnTotalLock.Location = new Point(290, 36);
+            btnTotalLock.Size = new Size(260, 48);
             btnTotalLock.Click += new EventHandler(BtnTotalLock_Click);
 
-            btnRestore = new Button();
-            btnRestore.Text = "Restore Default\r\nWindows 11";
-            btnRestore.Font = new Font("Segoe UI Semibold", 9.5f, FontStyle.Bold);
-            btnRestore.BackColor = Color.FromArgb(90, 102, 120); // Slate Grey
-            btnRestore.ForeColor = Color.White;
-            btnRestore.FlatStyle = FlatStyle.Flat;
-            btnRestore.FlatAppearance.BorderSize = 0;
-            btnRestore.Location = new Point(535, 30);
-            btnRestore.Size = new Size(255, 50);
-            btnRestore.Cursor = Cursors.Hand;
+            // Tombol Restore (Slate Glass)
+            btnRestore = new GlassButton();
+            btnRestore.Text = "Pulihkan Default\r\nWindows 11";
+            btnRestore.BaseColor = Color.FromArgb(30, 41, 59);
+            btnRestore.HoverColor = Color.FromArgb(51, 65, 85);
+            btnRestore.PressedColor = Color.FromArgb(15, 23, 42);
+            btnRestore.BorderLineColor = UITheme.BorderHighlight;
+            btnRestore.ForeColor = UITheme.TextPrimary;
+            btnRestore.Location = new Point(564, 36);
+            btnRestore.Size = new Size(278, 48);
             btnRestore.Click += new EventHandler(BtnRestore_Click);
 
+            // Checkbox Driver Lock
             chkBlockDrivers = new CheckBox();
-            chkBlockDrivers.Text = "Sertakan Blokir Update Driver Otomatis (ExcludeWUDriversInQualityUpdate)";
-            chkBlockDrivers.Font = new Font("Segoe UI", 9.5f, FontStyle.Regular);
-            chkBlockDrivers.Location = new Point(18, 92);
-            chkBlockDrivers.Size = new Size(490, 26);
+            chkBlockDrivers.Text = "Kunci pembaruan driver otomatis (ExcludeWUDriversInQualityUpdate)";
+            chkBlockDrivers.Font = new Font("Segoe UI", 9f);
+            chkBlockDrivers.ForeColor = UITheme.TextSecondary;
+            chkBlockDrivers.Location = new Point(18, 96);
+            chkBlockDrivers.Size = new Size(520, 26);
             chkBlockDrivers.Checked = true;
             chkBlockDrivers.CheckedChanged += new EventHandler(ChkBlockDrivers_CheckedChanged);
 
-            btnCleanCache = new Button();
+            // Tombol Pembersih Cache
+            btnCleanCache = new GlassButton();
             btnCleanCache.Text = "🧹 Bersihkan Cache";
-            btnCleanCache.Font = new Font("Segoe UI", 9f);
-            btnCleanCache.BackColor = Color.FromArgb(230, 236, 245);
-            btnCleanCache.FlatStyle = FlatStyle.Flat;
-            btnCleanCache.FlatAppearance.BorderColor = Color.FromArgb(200, 210, 225);
-            btnCleanCache.Location = new Point(535, 90);
-            btnCleanCache.Size = new Size(130, 32);
-            btnCleanCache.Cursor = Cursors.Hand;
+            btnCleanCache.Font = new Font("Segoe UI", 8.75f);
+            btnCleanCache.BaseColor = Color.FromArgb(22, 31, 48);
+            btnCleanCache.HoverColor = Color.FromArgb(30, 41, 59);
+            btnCleanCache.PressedColor = Color.FromArgb(15, 23, 42);
+            btnCleanCache.BorderLineColor = UITheme.BorderCard;
+            btnCleanCache.ForeColor = UITheme.SkyText;
+            btnCleanCache.Location = new Point(564, 94);
+            btnCleanCache.Size = new Size(136, 30);
             btnCleanCache.Click += new EventHandler(BtnCleanCache_Click);
 
-            btnRefresh = new Button();
-            btnRefresh.Text = "🔄 Segarkan";
-            btnRefresh.Font = new Font("Segoe UI", 9f);
-            btnRefresh.BackColor = Color.FromArgb(230, 236, 245);
-            btnRefresh.FlatStyle = FlatStyle.Flat;
-            btnRefresh.FlatAppearance.BorderColor = Color.FromArgb(200, 210, 225);
-            btnRefresh.Location = new Point(675, 90);
-            btnRefresh.Size = new Size(115, 32);
-            btnRefresh.Cursor = Cursors.Hand;
+            // Tombol Segarkan
+            btnRefresh = new GlassButton();
+            btnRefresh.Text = "🔄 Segarkan Data";
+            btnRefresh.Font = new Font("Segoe UI", 8.75f);
+            btnRefresh.BaseColor = Color.FromArgb(22, 31, 48);
+            btnRefresh.HoverColor = Color.FromArgb(30, 41, 59);
+            btnRefresh.PressedColor = Color.FromArgb(15, 23, 42);
+            btnRefresh.BorderLineColor = UITheme.BorderCard;
+            btnRefresh.ForeColor = UITheme.TextPrimary;
+            btnRefresh.Location = new Point(708, 94);
+            btnRefresh.Size = new Size(134, 30);
             btnRefresh.Click += new EventHandler(BtnRefresh_Click);
 
-            grpActions.Controls.Add(btnSmartPause);
-            grpActions.Controls.Add(btnTotalLock);
-            grpActions.Controls.Add(btnRestore);
-            grpActions.Controls.Add(chkBlockDrivers);
-            grpActions.Controls.Add(btnCleanCache);
-            grpActions.Controls.Add(btnRefresh);
+            panelActionsCard.Controls.Add(lblActionsTitle);
+            panelActionsCard.Controls.Add(btnSmartPause);
+            panelActionsCard.Controls.Add(btnTotalLock);
+            panelActionsCard.Controls.Add(btnRestore);
+            panelActionsCard.Controls.Add(chkBlockDrivers);
+            panelActionsCard.Controls.Add(btnCleanCache);
+            panelActionsCard.Controls.Add(btnRefresh);
 
-            // 4. Log GroupBox
-            grpLog = new GroupBox();
-            grpLog.Text = "📝 Log Aktivitas";
-            grpLog.Font = new Font("Segoe UI Semibold", 10f, FontStyle.Bold);
-            grpLog.ForeColor = Color.FromArgb(30, 41, 59);
-            grpLog.Location = new Point(18, 438);
-            grpLog.Size = new Size(808, 185);
-            grpLog.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
+            // --- BARIS 4: KOTAK LOG AKTIVITAS SLATE ---
+            panelLogCard = new GlassPanel();
+            panelLogCard.Location = new Point(20, 458);
+            panelLogCard.Size = new Size(858, 172);
+            panelLogCard.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
+
+            lblLogTitle = new Label();
+            lblLogTitle.Text = "Log Riwayat Sistem";
+            lblLogTitle.Font = new Font("Segoe UI Semibold", 10f, FontStyle.Bold);
+            lblLogTitle.ForeColor = UITheme.TextPrimary;
+            lblLogTitle.Location = new Point(16, 10);
+            lblLogTitle.AutoSize = true;
 
             txtLog = new TextBox();
             txtLog.Multiline = true;
             txtLog.ReadOnly = true;
             txtLog.ScrollBars = ScrollBars.Vertical;
-            txtLog.BackColor = Color.FromArgb(18, 24, 38);
-            txtLog.ForeColor = Color.FromArgb(100, 255, 180);
+            txtLog.BackColor = UITheme.BgInput;
+            txtLog.ForeColor = UITheme.EmeraldText;
             txtLog.Font = new Font("Consolas", 9f, FontStyle.Regular);
-            txtLog.Dock = DockStyle.Fill;
+            txtLog.BorderStyle = BorderStyle.None;
+            txtLog.Location = new Point(14, 34);
+            txtLog.Size = new Size(828, 122);
+            txtLog.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
 
-            grpLog.Controls.Add(txtLog);
+            panelLogCard.Controls.Add(lblLogTitle);
+            panelLogCard.Controls.Add(txtLog);
 
-            // 5. StatusStrip
+            // Susun Kontrol di Body Panel
+            panelBody.Controls.Add(cardPause);
+            panelBody.Controls.Add(cardPolicy);
+            panelBody.Controls.Add(cardCache);
+            panelBody.Controls.Add(panelServicesCard);
+            panelBody.Controls.Add(panelActionsCard);
+            panelBody.Controls.Add(panelLogCard);
+
+            // 3. Status Bar di Bawah
             statusStrip = new StatusStrip();
-            statusStrip.BackColor = Color.FromArgb(230, 235, 242);
+            statusStrip.BackColor = UITheme.BgHeader;
+            statusStrip.SizingGrip = false;
+            statusStrip.Padding = new Padding(12, 4, 12, 4);
 
             statusAdmin = new ToolStripStatusLabel();
             statusAdmin.Text = "Hak Akses: Administrator";
-            statusAdmin.ForeColor = Color.FromArgb(20, 100, 30);
+            statusAdmin.ForeColor = UITheme.EmeraldText;
             statusAdmin.BorderSides = ToolStripStatusLabelBorderSides.Right;
 
             statusOsVersion = new ToolStripStatusLabel();
-            statusOsVersion.Text = "Windows 11 Version: " + UpdateBlockerEngine.GetWindowsVersionDisplay();
+            statusOsVersion.Text = "Windows 11: " + UpdateBlockerEngine.GetWindowsVersionDisplay();
+            statusOsVersion.ForeColor = UITheme.TextSecondary;
             statusOsVersion.BorderSides = ToolStripStatusLabelBorderSides.Right;
 
             statusClock = new ToolStripStatusLabel();
             statusClock.Text = DateTime.Now.ToString("HH:mm:ss");
+            statusClock.ForeColor = UITheme.TextMuted;
 
-            statusStrip.Items.Add(statusAdmin);
-            statusStrip.Items.Add(statusOsVersion);
-            statusStrip.Items.Add(statusClock);
+            statusStrip.Items.AddRange(new ToolStripItem[] { statusAdmin, statusOsVersion, statusClock });
 
             clockTimer = new System.Windows.Forms.Timer();
             clockTimer.Interval = 1000;
             clockTimer.Tick += new EventHandler(ClockTimer_Tick);
             clockTimer.Start();
 
-            // Pasang semua kontrol ke Form
-            this.Controls.Add(grpLog);
-            this.Controls.Add(grpActions);
-            this.Controls.Add(grpStatus);
+            // Pasang Komponen Utama ke Form
+            this.Controls.Add(panelBody);
             this.Controls.Add(panelHeader);
             this.Controls.Add(statusStrip);
 
+            this.Resize += new EventHandler(MainForm_Resize);
             this.ResumeLayout(false);
             this.PerformLayout();
+        }
+
+        private void MainForm_Resize(object sender, EventArgs e)
+        {
+            // Proporsi lebar 3 kartu status agar selalu seimbang dan tidak bertumpuk
+            int availWidth = panelBody.ClientSize.Width - 40;
+            if (availWidth > 400)
+            {
+                int cardWidth = (availWidth - 24) / 3;
+                cardPause.Width = cardWidth;
+                cardPolicy.Left = cardPause.Right + 12;
+                cardPolicy.Width = cardWidth;
+                cardCache.Left = cardPolicy.Right + 12;
+                cardCache.Width = availWidth - (cardWidth * 2 + 24);
+            }
+
+            // Atur posisi badge di header agar selalu di kanan dengan jarak aman dari subtitle
+            lblOverallBadge.Left = panelHeader.Width - lblOverallBadge.Width - 24;
+
+            LstServices_Resize(this, EventArgs.Empty);
+        }
+
+        private void LstServices_Resize(object sender, EventArgs e)
+        {
+            if (lstServices.Columns.Count >= 4)
+            {
+                int totalW = lstServices.ClientSize.Width - 20;
+                if (totalW > 400)
+                {
+                    colName.Width = (int)(totalW * 0.40);
+                    colStartup.Width = (int)(totalW * 0.18);
+                    colStatus.Width = (int)(totalW * 0.18);
+                    colProtection.Width = totalW - (colName.Width + colStartup.Width + colStatus.Width);
+                }
+            }
+        }
+
+        private void PanelHeader_Paint(object sender, PaintEventArgs e)
+        {
+            using (Pen pen = new Pen(UITheme.BorderSubtle, 1.0f))
+            {
+                e.Graphics.DrawLine(pen, 0, panelHeader.Height - 1, panelHeader.Width, panelHeader.Height - 1);
+            }
+        }
+
+        private void Badge_Paint(object sender, PaintEventArgs e)
+        {
+            Label badge = sender as Label;
+            if (badge == null) return;
+
+            e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+            Rectangle rect = new Rectangle(0, 0, badge.Width - 1, badge.Height - 1);
+
+            using (GraphicsPath path = UITheme.CreateRoundedPath(rect, 8))
+            {
+                using (SolidBrush brush = new SolidBrush(badge.BackColor))
+                {
+                    e.Graphics.FillPath(brush, path);
+                }
+
+                Color borderCol = badge.ForeColor;
+                using (Pen pen = new Pen(borderCol, 1.2f))
+                {
+                    e.Graphics.DrawPath(pen, path);
+                }
+            }
+
+            TextFormatFlags flags = TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine;
+            TextRenderer.DrawText(e.Graphics, badge.Text, badge.Font, rect, badge.ForeColor, flags);
+        }
+
+        private void LstServices_DrawColumnHeader(object sender, DrawListViewColumnHeaderEventArgs e)
+        {
+            e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+            Rectangle rect = e.Bounds;
+
+            using (SolidBrush brush = new SolidBrush(UITheme.BgCardAlt))
+            {
+                e.Graphics.FillRectangle(brush, rect);
+            }
+
+            using (Pen pen = new Pen(UITheme.BorderSubtle, 1.0f))
+            {
+                e.Graphics.DrawLine(pen, rect.Left, rect.Bottom - 1, rect.Right, rect.Bottom - 1);
+            }
+
+            TextFormatFlags flags = TextFormatFlags.Left | TextFormatFlags.VerticalCenter;
+            Rectangle textRect = new Rectangle(rect.Left + 8, rect.Top, rect.Width - 12, rect.Height);
+            using (Font headerFont = new Font("Segoe UI Semibold", 8.5f, FontStyle.Bold))
+            {
+                TextRenderer.DrawText(e.Graphics, e.Header.Text, headerFont, textRect, UITheme.TextSecondary, flags);
+            }
+        }
+
+        private void LstServices_DrawItem(object sender, DrawListViewItemEventArgs e)
+        {
+            // Background baris selang-seling (Zebra)
+            Color rowBg = (e.ItemIndex % 2 == 0) ? UITheme.BgInput : Color.FromArgb(13, 19, 32);
+            using (SolidBrush brush = new SolidBrush(rowBg))
+            {
+                e.Graphics.FillRectangle(brush, e.Bounds);
+            }
+        }
+
+        private void LstServices_DrawSubItem(object sender, DrawListViewSubItemEventArgs e)
+        {
+            Graphics g = e.Graphics;
+            g.SmoothingMode = SmoothingMode.AntiAlias;
+            Rectangle rect = e.Bounds;
+
+            string text = e.SubItem.Text;
+            int colIndex = e.ColumnIndex;
+
+            if (colIndex == 0)
+            {
+                // Kolom Nama Layanan
+                TextFormatFlags flags = TextFormatFlags.Left | TextFormatFlags.VerticalCenter;
+                Rectangle textRect = new Rectangle(rect.Left + 8, rect.Top, rect.Width - 12, rect.Height);
+                TextRenderer.DrawText(g, text, lstServices.Font, textRect, UITheme.TextPrimary, flags);
+            }
+            else if (colIndex == 1)
+            {
+                // Kolom Startup Type
+                Color col = UITheme.TextSecondary;
+                if (text == "Disabled") col = UITheme.RoseText;
+                else if (text == "Manual") col = UITheme.EmeraldText;
+                else if (text == "Automatic") col = UITheme.SkyText;
+
+                TextFormatFlags flags = TextFormatFlags.Left | TextFormatFlags.VerticalCenter;
+                Rectangle textRect = new Rectangle(rect.Left + 8, rect.Top, rect.Width - 12, rect.Height);
+                TextRenderer.DrawText(g, text, lstServices.Font, textRect, col, flags);
+            }
+            else if (colIndex == 2)
+            {
+                // Kolom Status (Running / Stopped)
+                Color col = (text == "Running") ? UITheme.EmeraldText : UITheme.TextMuted;
+                TextFormatFlags flags = TextFormatFlags.Left | TextFormatFlags.VerticalCenter;
+                Rectangle textRect = new Rectangle(rect.Left + 8, rect.Top, rect.Width - 12, rect.Height);
+                TextRenderer.DrawText(g, text, lstServices.Font, textRect, col, flags);
+            }
+            else if (colIndex == 3)
+            {
+                // Kolom Badge Proteksi (Pill Renderer)
+                Color pillBg = UITheme.EmeraldBg;
+                Color pillBorder = UITheme.EmeraldBorder;
+                Color pillText = UITheme.EmeraldText;
+
+                if (text.IndexOf("Terkunci") >= 0)
+                {
+                    pillBg = UITheme.RoseBg;
+                    pillBorder = UITheme.RoseBorder;
+                    pillText = UITheme.RoseText;
+                }
+                else if (text.IndexOf("Otomatis") >= 0)
+                {
+                    pillBg = Color.FromArgb(12, 74, 110);
+                    pillBorder = UITheme.SkyBorder;
+                    pillText = UITheme.SkyText;
+                }
+
+                Rectangle pillRect = new Rectangle(rect.Left + 6, rect.Top + 4, Math.Min(rect.Width - 16, 150), rect.Height - 8);
+                if (pillRect.Width > 20 && pillRect.Height > 10)
+                {
+                    using (GraphicsPath path = UITheme.CreateRoundedPath(pillRect, 6))
+                    {
+                        using (SolidBrush brush = new SolidBrush(pillBg))
+                        {
+                            g.FillPath(brush, path);
+                        }
+                        using (Pen pen = new Pen(pillBorder, 1.0f))
+                        {
+                            g.DrawPath(pen, path);
+                        }
+                    }
+                    TextFormatFlags flags = TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine;
+                    using (Font pillFont = new Font("Segoe UI Semibold", 8f, FontStyle.Bold))
+                    {
+                        TextRenderer.DrawText(g, text, pillFont, pillRect, pillText, flags);
+                    }
+                }
+            }
         }
 
         private void ClockTimer_Tick(object sender, EventArgs e)
@@ -1198,33 +1735,60 @@ namespace Win11UpdateBlocker
         {
             SystemStatusSnapshot snapshot = UpdateBlockerEngine.ScanCurrentStatus();
 
-            // Perbarui Badge Header
+            // 1. Perbarui Badge Header Utama
             if (snapshot.IsTotalLockdown)
             {
-                lblOverallBadge.Text = "🔒 TOTAL LOCKDOWN";
-                lblOverallBadge.BackColor = Color.FromArgb(196, 43, 28); // Red
+                lblOverallBadge.Text = "TOTAL LOCKDOWN AKTIF";
+                lblOverallBadge.BackColor = UITheme.RoseBg;
+                lblOverallBadge.ForeColor = UITheme.RoseText;
             }
             else if (snapshot.IsPausedTo2077)
             {
-                lblOverallBadge.Text = "🛡️ SMART PAUSE 2077";
-                lblOverallBadge.BackColor = Color.FromArgb(16, 124, 65); // Green
+                lblOverallBadge.Text = "SMART PAUSE 2077 AKTIF";
+                lblOverallBadge.BackColor = UITheme.EmeraldBg;
+                lblOverallBadge.ForeColor = UITheme.EmeraldText;
             }
             else
             {
-                lblOverallBadge.Text = "⚠️ TIDAK TERKUNCI";
-                lblOverallBadge.BackColor = Color.FromArgb(180, 110, 15); // Amber/Orange
+                lblOverallBadge.Text = "STANDAR (TIDAK TERKUNCI)";
+                lblOverallBadge.BackColor = UITheme.AmberBg;
+                lblOverallBadge.ForeColor = UITheme.AmberText;
+            }
+            lblOverallBadge.Invalidate();
+
+            // 2. Perbarui Kartu Ringkasan
+            if (snapshot.IsPausedTo2077)
+            {
+                lblPauseValue.Text = "Hingga 31 Des 2077";
+                lblPauseValue.ForeColor = UITheme.EmeraldText;
+                lblPauseDetail.Text = "Jeda sistem aktif s/d tahun 2077";
+            }
+            else
+            {
+                lblPauseValue.Text = snapshot.PauseExpiryString;
+                lblPauseValue.ForeColor = UITheme.AmberText;
+                lblPauseDetail.Text = "Windows Update dapat berjalan";
             }
 
-            // Status Text
-            lblPauseStatus.Text = "Status Pause: " + (snapshot.IsPausedTo2077 ? "Aktif s/d " + snapshot.PauseExpiryString : snapshot.PauseExpiryString);
-            lblPolicyStatus.Text = "Group Policy: " + (snapshot.IsGroupPolicyLocked ? "Terkunci (NoAutoUpdate=1)" : "Standar / Tidak Terkunci");
-            lblCacheStatus.Text = string.Format("Ukuran Cache Unduhan: {0} | Driver Lock: {1}",
-                UpdateBlockerEngine.FormatBytes(snapshot.CacheSizeBytes),
-                snapshot.IsDriverUpdateBlocked ? "Aktif" : "Nonaktif");
+            if (snapshot.IsGroupPolicyLocked)
+            {
+                lblPolicyValue.Text = "Terkunci (NoAutoUpdate)";
+                lblPolicyValue.ForeColor = UITheme.EmeraldText;
+                lblPolicyDetail.Text = "Target: Windows 11 " + (string.IsNullOrEmpty(snapshot.TargetReleaseVersion) ? "Aktif" : snapshot.TargetReleaseVersion);
+            }
+            else
+            {
+                lblPolicyValue.Text = "Standar / Tidak Terkunci";
+                lblPolicyValue.ForeColor = UITheme.TextSecondary;
+                lblPolicyDetail.Text = "Kebijakan otomatis aktif";
+            }
 
+            lblCacheValue.Text = UpdateBlockerEngine.FormatBytes(snapshot.CacheSizeBytes);
+            lblCacheDetail.Text = snapshot.IsDriverUpdateBlocked ? "Driver Lock: Aktif" : "Driver Lock: Nonaktif";
             chkBlockDrivers.Checked = snapshot.IsDriverUpdateBlocked;
 
-            // Perbarui ListView Services
+            // 3. Perbarui Daftar Layanan
+            lstServices.BeginUpdate();
             lstServices.Items.Clear();
             foreach (ServiceInfoItem svc in snapshot.Services)
             {
@@ -1232,32 +1796,31 @@ namespace Win11UpdateBlocker
                 lvi.SubItems.Add(svc.StartMode);
                 lvi.SubItems.Add(svc.Status);
 
-                string indicator = "Normal";
+                string indicator = "Standar";
                 if (svc.StartMode == "Disabled")
                 {
-                    indicator = "⛔ Terkunci Mati";
-                    lvi.ForeColor = Color.DarkRed;
+                    indicator = "Terkunci Mati";
                 }
                 else if (svc.StartMode == "Manual")
                 {
-                    indicator = "✔️ Siap On-Demand";
-                    lvi.ForeColor = Color.DarkGreen;
+                    indicator = "Siap On-Demand";
                 }
-                else
+                else if (svc.StartMode == "Automatic")
                 {
-                    indicator = "⚡ Otomatis";
-                    lvi.ForeColor = Color.DarkBlue;
+                    indicator = "Otomatis Windows";
                 }
+
                 lvi.SubItems.Add(indicator);
                 lstServices.Items.Add(lvi);
             }
+            lstServices.EndUpdate();
         }
 
         private void BtnSmartPause_Click(object sender, EventArgs e)
         {
             DialogResult dr = MessageBox.Show(
-                "Mode 1 akan mengunci Windows Update hingga 31 Desember 2077 dan mematikan pengaktif otomatis WaaSMedicSvc.\n\n" +
-                "Microsoft Store dan Windows Defender akan TETAP BERFUNGSI NORMAL.\n\nLanjutkan penerapan?",
+                "Mode 1 akan mengunci Windows Update hingga 31 Desember 2077 dan mematikan perbaikan otomatis WaaSMedicSvc.\n\n" +
+                "Microsoft Store dan pembaruan definisi Windows Defender akan TETAP BERFUNGSI NORMAL.\n\nTerapkan mode ini sekarang?",
                 "Konfirmasi Mode 1: Smart Pause 2077",
                 MessageBoxButtons.YesNo,
                 MessageBoxIcon.Question);
@@ -1274,7 +1837,7 @@ namespace Win11UpdateBlocker
                 {
                     RefreshSystemStatus();
                     SetControlsEnabled(true);
-                    MessageBox.Show("Mode 1 (Smart Pause 2077) berhasil diterapkan!\nWindows Update OS dijeda hingga tahun 2077.", "Sukses", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    MessageBox.Show("Mode 1 (Smart Pause 2077) berhasil diterapkan!\nWindows Update OS berhasil dijeda hingga tahun 2077.", "Sukses", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 }));
             });
         }
@@ -1282,8 +1845,8 @@ namespace Win11UpdateBlocker
         private void BtnTotalLock_Click(object sender, EventArgs e)
         {
             DialogResult dr = MessageBox.Show(
-                "Mode 2 akan MEMATIKAN SELURUH 5 Windows Update Services termasuk wuauserv, BITS, dan DoSvc.\n\n" +
-                "CATATAN: Microsoft Store tidak akan dapat mengunduh aplikasi selama mode ini aktif.\n\nApakah Anda yakin ingin menerapkan Total Lockdown?",
+                "Mode 2 akan MEMATIKAN SELURUH 5 layanan Windows Update (termasuk wuauserv, BITS, dan DoSvc).\n\n" +
+                "Perhatian: Microsoft Store tidak dapat mengunduh aplikasi selama mode ini aktif.\n\nTerapkan Total Lockdown sekarang?",
                 "Konfirmasi Mode 2: Total Lockdown",
                 MessageBoxButtons.YesNo,
                 MessageBoxIcon.Warning);
@@ -1308,8 +1871,8 @@ namespace Win11UpdateBlocker
         private void BtnRestore_Click(object sender, EventArgs e)
         {
             DialogResult dr = MessageBox.Show(
-                "Apakah Anda ingin mengembalikan semua pengaturan, layanan, dan tugas Windows Update ke kondisi standar Windows 11?",
-                "Konfirmasi Restore Default",
+                "Apakah Anda ingin mengembalikan semua pengaturan, layanan, dan tugas Windows Update ke kondisi standar bawaan Windows 11?",
+                "Konfirmasi Pemulihan Default",
                 MessageBoxButtons.YesNo,
                 MessageBoxIcon.Question);
 
@@ -1324,7 +1887,7 @@ namespace Win11UpdateBlocker
                 {
                     RefreshSystemStatus();
                     SetControlsEnabled(true);
-                    MessageBox.Show("Pengaturan Windows Update berhasil dipulihkan ke default Windows 11.", "Sukses", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    MessageBox.Show("Pengaturan Windows Update berhasil dipulihkan ke setelan standar Windows 11.", "Sukses", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 }));
             });
         }
@@ -1340,7 +1903,7 @@ namespace Win11UpdateBlocker
                 {
                     RefreshSystemStatus();
                     SetControlsEnabled(true);
-                    MessageBox.Show("Cache unduhan Windows Update berhasil dibersihkan!", "Info", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    MessageBox.Show("Cache unduhan Windows Update berhasil dibersihkan.", "Pembersihan Berhasil", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 }));
             });
         }
@@ -1359,7 +1922,7 @@ namespace Win11UpdateBlocker
     }
     #endregion
 
-    #region Program Entry Point
+    #region Titik Masuk Aplikasi (Program Entry Point)
     internal static class Program
     {
         [STAThread]
