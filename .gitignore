@@ -1,0 +1,11 @@
+# Visual Studio / Compiler cache
+*.tmp
+*.log
+*.pdb
+*.obj
+.vs/
+.idea/
+.vscode/
+.system_generated/
+thumbs.db
+desktop.ini
