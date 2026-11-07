@@ -3,6 +3,7 @@
 *.log
 *.pdb
 *.obj
+*.old.exe
 .vs/
 .idea/
 .vscode/

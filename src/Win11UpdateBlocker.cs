@@ -5,6 +5,7 @@ using System.Diagnostics;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.IO;
+using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Security.AccessControl;
 using System.Security.Principal;
@@ -13,6 +14,14 @@ using System.Text;
 using System.Threading;
 using System.Windows.Forms;
 using Microsoft.Win32;
+
+[assembly: AssemblyTitle("Windows 11 Update Blocker - FixNow.id")]
+[assembly: AssemblyDescription("Aplikasi Kontrol & Blokir Permanen Windows Update Windows 11. Diproduksi oleh FixNow.id - Service Laptop Bandung.")]
+[assembly: AssemblyCompany("FixNow.id")]
+[assembly: AssemblyProduct("Windows 11 Update Blocker - FixNow.id")]
+[assembly: AssemblyCopyright("Diproduksi oleh FixNow.id - Service Laptop Bandung")]
+[assembly: AssemblyVersion("1.2.0.0")]
+[assembly: AssemblyFileVersion("1.2.0.0")]
 
 namespace Win11UpdateBlocker
 {
@@ -219,11 +228,13 @@ namespace Win11UpdateBlocker
     }
 
     /// <summary>
-    /// Header Banner yang mengukur teks secara dinamis di OnPaint agar tidak pernah tumpang tindih pada DPI berapa pun.
+    /// Header Banner yang merender Logo FixNow.id dan mengukur teks secara dinamis di OnPaint agar tidak pernah tumpang tindih pada DPI berapa pun.
     /// </summary>
     public class HeaderBannerControl : Control
     {
+        private Image brandLogo;
         public string TitleText { get; set; }
+        public string PublisherText { get; set; }
         public string SubtitleText { get; set; }
         public string BadgeText { get; set; }
         public Color BadgeBgColor { get; set; }
@@ -234,22 +245,42 @@ namespace Win11UpdateBlocker
         {
             SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.UserPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw, true);
             TitleText = "Windows 11 Update Blocker";
+            PublisherText = "Diproduksi oleh FixNow.id - Service Laptop Bandung";
             SubtitleText = "Kontrol pembaruan otomatis tanpa mengganggu Microsoft Store & Windows Defender";
             BadgeText = "MEMERIKSA STATUS...";
             BadgeBgColor = UITheme.AmberBadgeBg;
             BadgeBorderColor = UITheme.AmberBadgeBorder;
             BadgeTextColor = UITheme.AmberBadgeText;
             BackColor = UITheme.BgWindow;
-            Height = 82;
+            Height = 86;
+            LoadEmbeddedLogo();
+        }
+
+        private void LoadEmbeddedLogo()
+        {
+            try
+            {
+                Assembly asm = Assembly.GetExecutingAssembly();
+                Stream s = asm.GetManifestResourceStream("FixNowLogo.png");
+                if (s != null)
+                {
+                    brandLogo = Image.FromStream(s);
+                }
+            }
+            catch
+            {
+            }
         }
 
         protected override void OnPaint(PaintEventArgs e)
         {
             Graphics g = e.Graphics;
             g.SmoothingMode = SmoothingMode.AntiAlias;
+            g.InterpolationMode = InterpolationMode.HighQualityBicubic;
+            g.PixelOffsetMode = PixelOffsetMode.HighQuality;
             g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
 
-            // Latar putih bersih dengan efek kaca slate halus di bagian atas
+            // Latar putih bersih
             using (SolidBrush bgBrush = new SolidBrush(UITheme.BgWindow))
             {
                 g.FillRectangle(bgBrush, ClientRectangle);
@@ -261,41 +292,23 @@ namespace Win11UpdateBlocker
                 g.DrawLine(borderPen, 0, Height - 1, Width, Height - 1);
             }
 
-            // 1. Gambar Ikon Perisai Vektor di kiri (tanpa bergantung pada ukuran font emoji)
-            int iconSize = 38;
-            int iconX = 24;
-            int iconY = (Height - iconSize) / 2;
-            Rectangle iconBox = new Rectangle(iconX, iconY, iconSize, iconSize);
+            // 1. Gambar Logo FixNow di sisi kiri
+            int leftCursor = 24;
+            if (brandLogo != null)
+            {
+                int logoH = 44;
+                int logoW = (int)Math.Round(brandLogo.Width * (logoH / (double)brandLogo.Height));
+                int logoY = (Height - logoH) / 2;
+                Rectangle logoRect = new Rectangle(leftCursor, logoY, logoW, logoH);
+                g.DrawImage(brandLogo, logoRect);
+                leftCursor += logoW + 16;
 
-            using (GraphicsPath iconBgPath = UITheme.CreateRoundedPath(iconBox, 10))
-            {
-                using (SolidBrush iconBgBrush = new SolidBrush(UITheme.BgTableHeader))
+                // Garis pemisah vertikal tipis antara logo dan judul aplikasi
+                using (Pen divPen = new Pen(UITheme.BorderStrong, 1f))
                 {
-                    g.FillPath(iconBgBrush, iconBgPath);
+                    g.DrawLine(divPen, leftCursor, 18, leftCursor, Height - 18);
                 }
-                using (Pen iconBorderPen = new Pen(UITheme.BorderStrong, 1f))
-                {
-                    g.DrawPath(iconBorderPen, iconBgPath);
-                }
-            }
-
-            // Gambar bentuk perisai di dalam kotak ikon
-            PointF[] shieldPts = new PointF[]
-            {
-                new PointF(iconX + iconSize * 0.50f, iconY + 7),
-                new PointF(iconX + iconSize * 0.80f, iconY + 12),
-                new PointF(iconX + iconSize * 0.80f, iconY + 21),
-                new PointF(iconX + iconSize * 0.50f, iconY + 31),
-                new PointF(iconX + iconSize * 0.20f, iconY + 21),
-                new PointF(iconX + iconSize * 0.20f, iconY + 12)
-            };
-            using (GraphicsPath shieldPath = new GraphicsPath())
-            {
-                shieldPath.AddPolygon(shieldPts);
-                using (SolidBrush shieldFill = new SolidBrush(BadgeBorderColor))
-                {
-                    g.FillPath(shieldFill, shieldPath);
-                }
+                leftCursor += 16;
             }
 
             // 2. Ukur dan Gambar Badge Status di sebelah kanan
@@ -323,24 +336,31 @@ namespace Win11UpdateBlocker
                 TextFormatFlags badgeFlags = TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine | TextFormatFlags.NoPrefix;
                 TextRenderer.DrawText(g, BadgeText, badgeFont, badgeRect, BadgeTextColor, badgeFlags);
 
-                // 3. Gambar Judul & Subjudul di area tengah dengan perhitungan tinggi aktual (Anti Tumpang Tindih)
-                int textLeft = iconBox.Right + 16;
-                int availWidth = Math.Max(100, badgeRect.Left - textLeft - 20);
+                // 3. Gambar Judul, Keterangan Publisher FixNow.id, & Subjudul secara berurutan (Anti Tumpang Tindih)
+                int availWidth = Math.Max(100, badgeRect.Left - leftCursor - 20);
 
-                using (Font titleFont = new Font("Segoe UI Semibold", 13.5f, FontStyle.Bold))
-                using (Font subFont = new Font("Segoe UI", 9f, FontStyle.Regular))
+                using (Font titleFont = new Font("Segoe UI Semibold", 13f, FontStyle.Bold))
+                using (Font pubFont = new Font("Segoe UI Semibold", 8.5f, FontStyle.Bold))
+                using (Font subFont = new Font("Segoe UI", 8.5f, FontStyle.Regular))
                 {
                     Size titleSize = TextRenderer.MeasureText(g, TitleText, titleFont);
+                    Size pubSize = TextRenderer.MeasureText(g, PublisherText, pubFont);
                     Size subSize = TextRenderer.MeasureText(g, SubtitleText, subFont);
 
-                    int totalTextH = titleSize.Height + 4 + subSize.Height;
-                    int startY = Math.Max(8, (Height - totalTextH) / 2);
-
-                    Rectangle titleRect = new Rectangle(textLeft, startY, availWidth, titleSize.Height + 2);
-                    Rectangle subRect = new Rectangle(textLeft, startY + titleSize.Height + 3, availWidth, subSize.Height + 4);
+                    int totalTextH = titleSize.Height + 2 + pubSize.Height + 2 + subSize.Height;
+                    int curY = Math.Max(6, (Height - totalTextH) / 2);
 
                     TextFormatFlags textFlags = TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix;
+
+                    Rectangle titleRect = new Rectangle(leftCursor, curY, availWidth, titleSize.Height + 2);
                     TextRenderer.DrawText(g, TitleText, titleFont, titleRect, UITheme.TextPrimary, textFlags);
+                    curY += titleSize.Height + 2;
+
+                    Rectangle pubRect = new Rectangle(leftCursor, curY, availWidth, pubSize.Height + 2);
+                    TextRenderer.DrawText(g, PublisherText, pubFont, pubRect, UITheme.SkyBadgeText, textFlags);
+                    curY += pubSize.Height + 2;
+
+                    Rectangle subRect = new Rectangle(leftCursor, curY, availWidth, subSize.Height + 2);
                     TextRenderer.DrawText(g, SubtitleText, subFont, subRect, UITheme.TextMuted, textFlags);
                 }
             }
@@ -1527,6 +1547,7 @@ namespace Win11UpdateBlocker
         private TextBox txtLog;
 
         private StatusStrip statusStrip;
+        private ToolStripStatusLabel statusPublisher;
         private ToolStripStatusLabel statusAdmin;
         private ToolStripStatusLabel statusOsVersion;
         private ToolStripStatusLabel statusClock;
@@ -1537,7 +1558,25 @@ namespace Win11UpdateBlocker
             SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.UserPaint | ControlStyles.OptimizedDoubleBuffer, true);
             InitializeComponent();
             RefreshSystemStatus();
-            LogMessage("Sistem siap. Pilih salah satu mode proteksi di atas.");
+            LogMessage("Diproduksi oleh FixNow.id - Service Laptop Bandung. Sistem siap digunakan.");
+        }
+
+        private void LoadEmbeddedIcon()
+        {
+            try
+            {
+                Assembly asm = Assembly.GetExecutingAssembly();
+                Stream s = asm.GetManifestResourceStream("FixNowIcon.ico");
+                if (s != null)
+                {
+                    this.Icon = new Icon(s);
+                    return;
+                }
+            }
+            catch
+            {
+            }
+            this.Icon = SystemIcons.Shield;
         }
 
         private void InitializeComponent()
@@ -1545,19 +1584,19 @@ namespace Win11UpdateBlocker
             this.SuspendLayout();
 
             this.AutoScaleMode = AutoScaleMode.Dpi;
-            this.Text = "Windows 11 Update Blocker v1.1 (Kontrol Permanen & Aman)";
-            this.Size = new Size(940, 810);
-            this.MinimumSize = new Size(880, 740);
+            this.Text = "Windows 11 Update Blocker v1.2 - Diproduksi oleh FixNow.id (Service Laptop Bandung)";
+            this.Size = new Size(950, 820);
+            this.MinimumSize = new Size(900, 750);
             this.StartPosition = FormStartPosition.CenterScreen;
             this.BackColor = UITheme.BgWindow;
             this.ForeColor = UITheme.TextPrimary;
             this.Font = new Font("Segoe UI", 9f, FontStyle.Regular);
-            this.Icon = SystemIcons.Shield;
+            LoadEmbeddedIcon();
 
-            // 1. Header Banner (Self-Measuring)
+            // 1. Header Banner (Self-Measuring + FixNow Logo)
             headerBanner = new HeaderBannerControl();
             headerBanner.Dock = DockStyle.Top;
-            headerBanner.Height = 82;
+            headerBanner.Height = 86;
 
             // 2. Main Grid (TableLayoutPanel 4 Baris: Kartu Metrik, Tabel Layanan, Panel Operasi, Log)
             mainGrid = new TableLayoutPanel();
@@ -1787,6 +1826,12 @@ namespace Win11UpdateBlocker
             statusStrip.SizingGrip = false;
             statusStrip.Padding = new Padding(14, 3, 14, 3);
 
+            statusPublisher = new ToolStripStatusLabel();
+            statusPublisher.Text = "Diproduksi oleh FixNow.id - Service Laptop Bandung";
+            statusPublisher.ForeColor = UITheme.SkyBadgeText;
+            statusPublisher.Font = new Font("Segoe UI Semibold", 8.5f, FontStyle.Bold);
+            statusPublisher.BorderSides = ToolStripStatusLabelBorderSides.Right;
+
             statusAdmin = new ToolStripStatusLabel();
             statusAdmin.Text = "Hak Akses: Administrator";
             statusAdmin.ForeColor = UITheme.EmeraldBadgeText;
@@ -1802,7 +1847,7 @@ namespace Win11UpdateBlocker
             statusClock.Text = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
             statusClock.ForeColor = UITheme.TextMuted;
 
-            statusStrip.Items.AddRange(new ToolStripItem[] { statusAdmin, statusOsVersion, statusClock });
+            statusStrip.Items.AddRange(new ToolStripItem[] { statusPublisher, statusAdmin, statusOsVersion, statusClock });
 
             clockTimer = new System.Windows.Forms.Timer();
             clockTimer.Interval = 1000;

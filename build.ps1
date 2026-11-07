@@ -10,8 +10,21 @@ if (-not (Test-Path $cscPath)) {
 }
 
 $outputExe = Join-Path $PSScriptRoot "Win11UpdateBlocker.exe"
+$oldExe = Join-Path $PSScriptRoot "Win11UpdateBlocker.old.exe"
+if (Test-Path $oldExe) {
+    Remove-Item $oldExe -Force -ErrorAction SilentlyContinue
+}
+if (Test-Path $outputExe) {
+    try {
+        Remove-Item $outputExe -Force -ErrorAction Stop
+    } catch {
+        Move-Item $outputExe $oldExe -Force -ErrorAction SilentlyContinue
+    }
+}
 $sourceFile = Join-Path $PSScriptRoot "src\Win11UpdateBlocker.cs"
 $manifestFile = Join-Path $PSScriptRoot "src\app.manifest"
+$iconFile = Join-Path $PSScriptRoot "src\fixnow.ico"
+$logoFile = Join-Path $PSScriptRoot "src\fixnow_logo.png"
 
 $references = @(
     "System.dll",
@@ -25,15 +38,17 @@ $argsList = @(
     "/target:winexe",
     "/optimize+",
     "/platform:x64",
-    "/win32manifest:`"$manifestFile`"",
-    "/out:`"$outputExe`"",
+    "/win32manifest:$manifestFile",
+    "/win32icon:$iconFile",
+    "/resource:$logoFile,FixNowLogo.png",
+    "/resource:$iconFile,FixNowIcon.ico",
+    "/out:$outputExe",
     "/r:$references",
-    "`"$sourceFile`""
+    "$sourceFile"
 )
 
 Write-Host "Mengompilasi berkas sumber: $sourceFile" -ForegroundColor Yellow
-$compileCmd = "& `"$cscPath`" " + ($argsList -join " ")
-Invoke-Expression $compileCmd
+& $cscPath @argsList
 
 if ($LASTEXITCODE -eq 0 -and (Test-Path $outputExe)) {
     $fileInfo = Get-Item $outputExe

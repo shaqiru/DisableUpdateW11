@@ -1,6 +1,9 @@
 # Windows 11 Update Blocker
 
-Aplikasi desktop GUI native Windows (C# .NET Framework 4.8) mandiri berukuran super ringan (~38 KB) untuk mengontrol dan memblokir pembaruan otomatis Windows 11 secara permanen, aman, dan tanpa merusak fungsi Microsoft Store maupun Windows Defender.
+**Publisher**: FixNow.id  
+**Keterangan Produksi**: Diproduksi oleh FixNow.id - Service Laptop Bandung
+
+Aplikasi desktop GUI native Windows (C# .NET Framework 4.8) mandiri berukuran ringan (~90 KB) untuk mengontrol dan memblokir pembaruan otomatis Windows 11 secara permanen, aman, dan tanpa merusak fungsi Microsoft Store maupun Windows Defender.
 
 ---
 
